@@ -1,30 +1,41 @@
-from flask import Flask, render_template, Response
+from flask import Flask, Response
+from flask_cors import CORS
 import cv2
 
 app = Flask(__name__)
+CORS(app)
 
-camera = cv2.VideoCapture(0)
+RTSP_SWEDEN_URL = "http://195.196.36.242/mjpg/video.mjpg"
+RTSP_PENDELCAM_URL = "http://pendelcam.kip.uni-heidelberg.de/mjpg/video.mjpg"
 
 
-def gen_frames():
+def video_stream(url):
+    cap = cv2.VideoCapture(url)
     while True:
-        success, frame = camera.read()
+        success, frame = cap.read()
         if not success:
             break
-        else:
-            ret, buffer = cv2.imencode(".jpg", frame)
-            frame = buffer.tobytes()
-            yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+        ret, buffer = cv2.imencode(".jpg", frame)
+        if not ret:
+            continue
+        frame = buffer.tobytes()
+        yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+@app.route("/video_feed_sweden")
+def video_feed_sweden():
+    return Response(
+        video_stream(RTSP_SWEDEN_URL),
+        mimetype="multipart/x-mixed-replace; boundary=--frame",
+    )
 
 
-@app.route("/video_feed")
-def video_feed():
-    return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+@app.route("/video_feed_pendelcam")
+def video_feed_pendelcam():
+    return Response(
+        video_stream(RTSP_PENDELCAM_URL),
+        mimetype="multipart/x-mixed-replace; boundary=--frame",
+    )
 
 
 if __name__ == "__main__":
